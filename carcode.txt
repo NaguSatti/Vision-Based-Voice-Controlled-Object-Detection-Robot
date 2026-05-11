@@ -1,0 +1,168 @@
+include < DabbleESP32.h >
+include <TinyGPSPlus.h>
+include <HardwareSerial.h>
+include <WiFi.h>
+include <WebServer.h>
+// —————‑WIFI—————
+const char* ssid = ”YOURWIFINAME”;
+constchar ∗ password = ”YOURWIFIPASSWORD”;
+WebServerserver(80);
+String gpsLink = ”Waiting for GPS signal...”;
+// —————‑GPS—————
+TinyGPSPlus gps;
+HardwareSerial gpsSerial(1);
+define MOTORSPEED200
+defineTURNINGSPEED150
+int enableRightMotor = 22;
+int rightMotorPin1 = 16;
+int rightMotorPin2 = 17;
+int enableLeftMotor = 23;
+int leftMotorPin1 = 18;
+int leftMotorPin2 = 19;
+const int PWMFreq=1000;
+const int PWMResolution =8;
+const int rightMotorPWMSpeedChannel =4;
+const int leftMotorPWMSpeedChannel=5;
+// —————‑ULTRASONIC—————
+define TRIGFRONT32
+defineECHOFRONT33
+define TRIGLEFT25
+defineECHOLEFT26
+define TRIGRIGHT27
+defineECHORIGHT14
+// —————‑DISTANCEFUNCTION—————
+long getDistance(int trigPin, int echoPin)
+digitalWrite(trigPin, LOW);
+delayMicroseconds(2);
+digitalWrite(trigPin, HIGH);
+delayMicroseconds(10);
+digitalWrite(trigPin, LOW);
+long duration = pulseIn(echoPin, HIGH, 30000);
+long distance = duration * 0.034 / 2;
+return distance;
+// —————‑MOTORFUNCTION—————
+void rotateMotor(int rightSpeed, int leftSpeed)
+// Right Motor
+if (rightSpeed > 0)
+digitalWrite(rightMotorPin1, HIGH);
+digitalWrite(rightMotorPin2, LOW);
+else if (rightSpeed < 0)
+digitalWrite(rightMotorPin1, LOW);
+digitalWrite(rightMotorPin2, HIGH);
+else
+digitalWrite(rightMotorPin1, LOW);
+digitalWrite(rightMotorPin2, LOW);
+// Left Motor
+if (leftSpeed > 0)
+digitalWrite(leftMotorPin1, HIGH);
+digitalWrite(leftMotorPin2, LOW);
+else if (leftSpeed < 0)
+digitalWrite(leftMotorPin1, LOW);
+digitalWrite(leftMotorPin2, HIGH);
+else
+digitalWrite(leftMotorPin1, LOW);
+digitalWrite(leftMotorPin2, LOW);
+ledcWrite(rightMotorPWMSpeedChannel, abs(rightSpeed));
+ledcWrite(leftMotorPWMSpeedChannel, abs(leftSpeed));
+// —————‑VOICECONTROL—————
+void controlWithVoice()
+if (Terminal.available())
+String cmd=Terminal.readString();
+cmd.trim();
+cmd.toLowerCase();
+Serial.print(”Voice Command: ”);
+Serial.println(cmd);
+if (cmd.indexOf(”forward”) !=‑1)
+rotateMotor(MOTORSPEED,MOTORSPEED);
+elseif(cmd.indexOf(”back”)! = −1)
+rotateMotor(−MOTORSPEED,−MOTORSPEED);
+elseif(cmd.indexOf(”left”)! = −1)
+rotateMotor(TURNINGSPEED,−TURNINGSPEED);
+elseif(cmd.indexOf(”right”)! = −1)
+rotateMotor(−TURNINGSPEED,TURNINGSPEED);
+elseif(cmd.indexOf(”stop”)! = −1)
+rotateMotor(0,0);
+// —————‑OBSTACLEAVOIDANCE—————
+void obstacleAvoidance()
+v longfrontDistance = getDistance(TRIGFRONT,ECHOFRONT);
+longleftDistance = getDistance(TRIGLEFT,ECHOLEFT);
+longrightDistance = getDistance(TRIGRIGHT,ECHORIGHT);
+Serial.print(”Front: ”);
+Serial.print(frontDistance);
+Serial.print(” Left: ”);
+Serial.print(leftDistance);
+Serial.print(” Right: ”);
+Serial.println(rightDistance);
+if (frontDistance > 0 frontDistance < 20)
+rotateMotor(0, 0);
+delay(300
+if (leftDistance > rightDistance)
+rotateMotor(TURNINGSPEED,−TURNINGSPEED);
+delay(400);
+else
+rotateMotor(−TURNINGSPEED,TURNINGSPEED);delay(400);
+rotateMotor(0, 0);
+// —————‑GPSFUNCTION—————
+void readGPS()
+while (gpsSerial.available())
+gps.encode(gpsSerial.read());
+if (gps.location.isValid())
+float latitude = gps.location.lat();
+float longitude = gps.location.lng();
+6);
+gpsLink=”https://www.google.com/maps?q=”+String(latitude,6)+”,”+String(longitude,
+Serial.print(”Latitude: ”);
+Serial.println(latitude, 6);
+Serial.print(”Longitude: ”);
+Serial.println(longitude, 6);
+Serial.println(gpsLink);
+// —————‑SETUP—————
+void setup()
+Serial.begin(115200);
+// Motor pins
+pinMode(enableRightMotor, OUTPUT);
+pinMode(rightMotorPin1, OUTPUT);
+pinMode(rightMotorPin2, OUTPUT);
+pinMode(enableLeftMotor, OUTPUT);
+pinMode(leftMotorPin1, OUTPUT);
+pinMode(leftMotorPin2, OUTPUT);
+ledcSetup(rightMotorPWMSpeedChannel, PWMFreq, PWMResolution);
+ledcSetup(leftMotorPWMSpeedChannel, PWMFreq,PWMResolution);
+rotateMotor(0, 0);
+ledcAttachPin(enableRightMotor, rightMotorPWMSpeedChannel);
+ledcAttachPin(enableLeftMotor, leftMotorPWMSpeedChannel);
+// Ultrasonic pins
+pinMode(TRIGFRONT,OUTPUT);
+pinMode(ECHOFRONT,INPUT);
+pinMode(TRIGLEFT,OUTPUT);
+pinMode(ECHOLEFT,INPUT);
+pinMode(TRIGRIGHT,OUTPUT);
+pinMode(ECHORIGHT,INPUT);
+// GPSpins
+gpsSerial.begin(9600, SERIAL8N1,13,15);
+// Bluetooth
+Dabble.begin(”MyVoiceCar”);
+// WiFi
+WiFi.begin(ssid, password);
+Serial.print(”Connecting to WiFi”);
+while (WiFi.status() != WLCONNECTED)
+delay(500);Serial.print(”.”);
+Serial.println();
+Serial.println(”WiFi Connected”);
+Serial.print(”ESP32 IP Address: ”);
+Serial.println(WiFi.localIP());
+server.on(”/”, []()
+String page = ”<h2>SmartCarGPSTracking</h2>”;
+page+=”<ahref=’” +gpsLink+”’target=’blank′ > OpenGPSLocation < /a > ”;
+server.send(200,”text/html”,page);
+);
+server.begin();
+Serial.println(”System Ready”);
+// —————‑LOOP—————
+void loop()
+Dabble.processInput();
+controlWithVoice();
+obstacleAvoidance();
+readGPS();
+server.handleClient();
+delay(10);
